@@ -1,0 +1,174 @@
+chocolatine: S-ARIMA based alert detection for IODA time series data
+
+Authors:
+  The original chocolatine was written by Andréas Guillot.
+  This adaptation was developed by Shane Alcock.
+
+For more information on the chocolatine methodology, see the paper
+"Chocolatine: Outage Detection for Internet Background Radiation" published
+at TMA 2019 (https://arxiv.org/abs/1906.04426).
+
+Chocolatine consists of two components: the modeller and the libchocolatine
+module.
+
+The modeller is used to determine the ARMA model that is the best fit for
+a particular IODA time series.
+
+libchocolatine is used to forecast future time series values and compare
+the subsequent observations against those forecasts, highlighting instances
+where the observation and forecast are significantly different.
+
+
+## Installation
+
+Simply enter the chocolatine source code directory and run
+`pip3 install .`. All python dependencies should be automatically installed
+at the same time.
+
+Both the modeller and the libchocolatine module will be installed.
+
+## Additional setup
+
+The ARMA models that are derived for each IODA time series are written into
+a postgresql database. Both the modeller and any software using libchocolatine
+will need access to that database.
+
+The database requires the following table to exist:
+
+```
+CREATE TABLE IF NOT EXISTS public.arma_models (
+
+    ar_param INT NOT NULL,
+    ma_param INT NOT NULL,
+    param_limit INT NOT NULL,
+    datasource VARCHAR(255) NOT NULL,
+    entitytype VARCHAR(255) NOT NULL,
+    entitycode VARCHAR(255) NOT NULL,
+    fqid VARCHAR(255) NULL,
+    generated_at INT NOT NULL,
+    training_start INT NOT NULL,
+    time_to_generate REAL NOT NULL,
+    pred_intervals REAL[] NOT NULL,
+    model_type VARCHAR(128) NULL
+);
+```
+
+## Running the modeller
+
+
+## Using libchocolatine
+This is a very rough guide for using libchocolatine for alert detection.
+
+Libchocolatine is a python module, so you'll have to write Python code to
+make use of it. In practice, it probably makes more sense to use the
+SArimaChocolatine module within the watchtower-sentry system, especially
+if you are working with IODA data directly, but I've included these notes
+here in case anyone wants to use this module in other contexts.
+
+Imports:
+```
+from libchocolatine.libchocolatine import ChocolatineDetector
+from libchocolatine.asyncfetcher import AsyncHistoryFetcher
+```
+
+Now, declare a ChocolatineDetector instance:
+```
+det = ChocolatineDetector(name, apiurl, kafkaconf, dbconf, maxarma)
+```
+
+`name` is simply a label that you want to use to distinguish this detector
+instance from other detector instances.
+
+`apiurl` is the URL that chocolatine must use to query the IODA API for raw
+signal data, but not including the entityType or entityCode portions of the
+path (e.g. "https://api.ioda.inetintel.cc.gatech.edu/v2/signals/raw" ).
+
+`kafkaconf` is a dictionary containing configuration for the kafka topics
+that are used to pass model requests and answers between this software and
+the modeller. There are three dictionary keys that should be provided:
+
+ * `modellerTopic`: the name of the topic where model requests should be sent
+ * `bootstrapModel`: the list of bootstrap-servers for the kafka cluster that
+                     is hosting the topic
+ * `group`: the consumer group to use when fetching model answers from the
+            topic
+
+`dbconf` is a dictionary containing configuration for the postgres database
+where previously derived models are stored. The keys for this dictionary are:
+
+ * `name`: the name of the database to connect to. Default is "models".
+ * `host`: the host where the database is located. Default is "localhost".
+ * `port`: the port to connect to on the database host. Default is 5432.
+
+`maxarma` is the maximum number of AR and MA parameters in total that are
+permitted in a derived model. The default `maxarma` is 3. Larger values
+will mean that model derivation will take longer (because there are more
+possible combinations of AR and MA values to evaluate) and runs the risk of
+the resulting model being over-fitted to the training data.
+
+
+Next, declare an instance of an AsyncHistoryFetcher:
+```
+fetcher = AsyncHistoryFetcher(apiurl, det.histRequest, det.histReply)
+```
+
+The `apiurl` is the same IODA API URL that you provided when you created the
+detector.
+
+The `histRequest` and `histReply` parameters are members of the
+ChocolatineDetector that you created earler, and are used to pass historical
+data fetch requests and the resulting fetched data back and forth between
+the detector and your asynchronous fetcher.
+
+
+Start both instances using their `start()` method:
+```
+det.start()
+fetcher.start()
+```
+
+Now, you can pass your latest observed data points to the detector using
+the `queueLiveData()` method:
+```
+det.queueLiveData(key, timestamp, value)
+```
+
+And the results of the comparison between S-ARIMA forecasts and the observed
+values that you have previously queued can be accessed by calling the
+`getLiveDataResult()` method.
+
+```
+res = det.getLiveDataResult(blocking)
+```
+
+where the `blocking` parameter indicates whether you want the query to block
+until the detector has a result available -- usually you want to set this to
+False and simply try again later if you get `None` back as a result.
+
+If the result is not `None`, then it should be a tuple that looks like
+`( key, timestamp, details )`. `key` and `timestamp` obviously tell you which
+time series and which timestamp the result refers to.
+
+The `details` is a dictionary containing the actual result itself, with the
+following keys:
+ * `timestamp`: the timestamp of the observed data point
+ * `observed`: the observed value at the timestamp
+ * `predicted`: the forecasted value at the timestamp
+ * `threshold`: the minimum allowable observed value for this observation to
+                NOT be considered anomalous by S-ARIMA
+ * `norm_threshold`: the minimum allowable observed value for this observation
+                to be considered "normal" IF the series is currently
+                considered to be in an "alert state".
+ * `alertable`: set to True if `observed` is below `threshold`, False otherwise.
+ * `baseline`: an approximate baseline minimum value for the time series, which can be useful for calculating the magnitude of an alert.
+
+
+When you are done using the detector, you can halt it and fetcher using
+the `halt()` method.
+
+```
+det.halt()
+fetcher.halt()
+```
+
+

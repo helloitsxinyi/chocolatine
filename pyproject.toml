@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "libchocolatine"
+description = "Chocolatine: event detection using S-ARIMA for IODA data"
+version = "1.0.0"
+dependencies = [
+        "pandas", "confluent-kafka", "threadpoolctl", "statsmodels",
+        "scikit-learn", "psycopg2", "aiohttp"
+]
+
+
+[project.scripts]
+choc-modeller = "chocmodeller.modeller:startModeller"
+
+[tool.setuptools]
+packages = ["libchocolatine", "chocmodeller"]
+package-dir = {"" = "src"}
+
