@@ -220,7 +220,7 @@ class Arima():
         self.results_dir = 'results/'
 
         # Setup logging parameters
-        logging.basicConfig(filename='logs/logs.log', level=logging.DEBUG,
+        logging.basicConfig(handlers=[logging.handlers.SysLogHandler()], level=logging.INFO,
                             format='%(asctime)s %(processName)s %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -688,15 +688,6 @@ class Arima():
                 d = diff_df[test_start:].copy().to_frame()
                 d['diff-predictions'] = diff_predictions
                 d.dropna(inplace=True)
-               
-                fname = self.results_dir + "/" + df.name + "-" + \
-                        "%d-%d-%d" % (order[0], order[1], order[2]) + \
-                        ".predictions"
-                with open(fname, "w") as f:
-                    for i in range(0, len(predictions)):
-                        current_value = df[test_start:].iloc[i]
-                        current_time = df[test_start:].index[i]
-                        f.write("%s,%.3f,%.3f\n" % (current_time,current_value,predictions[i]))
 
                 error = sqrt(
                     mean_squared_error(
