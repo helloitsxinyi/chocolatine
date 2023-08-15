@@ -143,6 +143,7 @@ from typing import List, Tuple, Iterable, Optional, Dict
 # Utility
 import sys
 import logging
+from logging.handlers import SysLogHandler
 import warnings
 import queue as Queue
 from timeit import default_timer as timer
@@ -220,7 +221,7 @@ class Arima():
         self.results_dir = 'results/'
 
         # Setup logging parameters
-        logging.basicConfig(handlers=[logging.handlers.SysLogHandler()], level=logging.INFO,
+        logging.basicConfig(handlers=[SysLogHandler()], level=logging.INFO,
                             format='%(asctime)s %(processName)s %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
