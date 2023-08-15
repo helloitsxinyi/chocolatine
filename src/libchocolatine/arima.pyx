@@ -982,17 +982,6 @@ class Arima():
     def prepare_analysis(self, df, ppw, outages=None, multiprocessing=True):
         """ Do the things in common between static and live analysis. """
 
-        # Skip files that have already been processed
-        for filename in os.listdir(self.results_dir):
-            if '{}-{}-{}'.format(
-                df.name,
-                df[self.training_time[0]:].index[0].timestamp(),
-                df.index[-1].timestamp(),
-            ) in filename:
-                logging.info('A file with the time series series already '
-                             'exists: {}'.format(filename))
-                return 0, (None,) * 4
-
         logging.info('Analyzing time series {}'.format(df.name))
         self.outages = outages
 
@@ -1007,9 +996,6 @@ class Arima():
             self.test_signal(diff_df)
         except(LinAlgError):
             logging.error('Could not test signals')
-
-        df.to_csv(self.results_dir + "/" + df.name + ".raw")
-        diff_df.to_csv(self.results_dir + "/" + df.name + ".diff")
 
         # Train different models and get the best one
         best_config, mads = self.find_best_model(df, diff_df, ppw,
@@ -1180,16 +1166,3 @@ class Arima():
             logging.info('Found {} potential outages.'
                          ''.format(len(potential_outages))
                          )
-
-        # Filename in which the results are going to be stored
-        filename = '{}-{}-{}-{}-{}-{},{}.pkl'.format(
-            int(df[self.training_time[0]:].median()),
-            df.name,
-            df[self.training_time[0]:].index[0].timestamp(),
-            df.index[-1].timestamp(),
-            bool(outages),  # Say if the dataset contains outages or not
-            best_config[0], best_config[1]
-        )
-
-        logging.debug('Saving results to {}'.format(filename))
-        potential_outages.to_pickle(self.results_dir + filename)
