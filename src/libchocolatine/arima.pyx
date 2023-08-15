@@ -191,9 +191,9 @@ class Arima():
             Maximum number of ARMA parameters so that (p + q < 'arima_order')
         save: bool
             Variable specifying if pickle files of the datasets should be
-            created or not.
+            created or not. (DEFUNCT)
         plot: bool
-            Plot the data or not.
+            Plot the data or not (DEFUNCT).
         signal_number: int
             A simple way to ensure that multiple sections will have different
             figure names.
@@ -216,9 +216,6 @@ class Arima():
         self.plot = plot
         self.signal_number = signal_number
         self.thresholds = thresholds
-
-        self.pkl_dir = 'pickles/'
-        self.results_dir = 'results/'
 
         # Setup logging parameters
         logging.basicConfig(handlers=[SysLogHandler()], level=logging.INFO,
@@ -377,77 +374,6 @@ class Arima():
         """
 
         return (predicted - real) / (predicted - lower)
-
-    def save_forecasts(self, potential_outages, test, diff_test, predictions,
-                       std, stds) -> None:
-        """
-        Save the different structures created in walk_forward_validation.
-        """
-
-        prefix = '{}{}-{}_{}-{}_'.format(
-            self.pkl_dir, self.signal_number, test.name,
-            test.index[0].timestamp(), test.index[-1].timestamp()
-        )
-
-        potential_outages.to_pickle(prefix + 'potential_outages.pkl')
-        test.to_pickle(prefix + 'test.pkl')
-        diff_test.to_pickle(prefix + 'diff_.pkl')
-        np.save(prefix + 'predictions', predictions)
-        np.save(prefix + 'std', std)
-        np.save(prefix + 'stds', stds)
-
-    def plot_forecasts(self, df, order, predictions, std, potential_outages
-                       ) -> None:
-
-        return
-        #p = Plot()
-
-        title = '{}Predictions vs {}data (order = {})'.format(
-            '' if 'diff' in df.name else 'Inverted ',
-            'differenced ' if 'diff' in df.name else '',
-            order
-        )
-
-        p.plot_predictions(
-            df.index,
-            df.fillna(0).values,
-            df.iloc[-len(predictions):].index,
-            predictions,
-            std,
-            potential_outages,
-            self.outages,
-            title,
-            '{}-{}_{}-{}'.format(self.signal_number, df.name,
-                                 df.index[-len(predictions)].timestamp(),
-                                 df.index[-1].timestamp()
-                                 ),
-            self.training_time[1],
-            self.validation_time[1]
-        )
-
-    def plot_signal(self, df):
-        filename = '{}-{}_{}-{}.pdf'.format(self.signal_number, df.name,
-                                            df.index[0].timestamp(),
-                                            df.index[-1].timestamp()
-                                            )
-        return
-        # p = Plot()
-
-        p.plot_number_of_unique_ip(
-            df, 'ip_' + filename, title='Number of unique IP addresses for {} '
-            'between {} and {}'.format(df.name, df.index[0].timestamp(),
-                                       df.index[-1].timestamp())
-        )
-        p.plot_autocorrelation(
-            df, 'acf_' + filename, title='Autocorrelation for {} between {} an'
-            'd {}'.format(df.name, df.index[0].timestamp(),
-                          df.index[-1].timestamp())
-        )
-        p.plot_partial_autocorrelation(
-            df, 'pacf_' + filename, title='Partial autocorrelation for {} betw'
-            'een {} and {}'.format(df.name, df.index[0].timestamp(),
-                                   df.index[-1].timestamp())
-        )
 
     def get_median_absolute_deviations(self, df: pd.DataFrame,
                                        predictions: List) -> List[float]:
@@ -712,23 +638,6 @@ class Arima():
                                diff_history[test_start:],
                                predictions))
 
-                # Record data and plot figures
-                if self.save:
-                    resized_stds = (
-                        mad * ceil(len(df[test_start:]) / len(mad))
-                    )[:len(df[test_start:])]
-                    self.save_forecasts(potential_outages, df[test_start:],
-                                        diff_df[test_start:], diff_predictions,
-                                        diff_std, resized_stds)
-                if self.plot:
-                    resized_stds = (
-                        mad * ceil(len(df[test_start:]) / len(mad))
-                    )[:len(df[test_start:])]
-
-                    self.plot_forecasts(
-                        df[self.training_time[0]:].interpolate(), order,
-                        predictions, resized_stds, potential_outages
-                    )
 
         # If the linear equations did not converge
         except(LinAlgError):
@@ -837,19 +746,6 @@ class Arima():
                 best_score = error
                 best_config = order
                 mads = mad
-
-        if self.save:
-            if isinstance(self.difference_order, list):
-                d = '-'.join([str(x) for x in self.difference_order])
-            else:
-                d = self.difference_order
-
-            filename = self.results_dir + '{}_{}-{}_{}_{}_{}.csv'.format(
-                df.name, df.index[0].timestamp(), df.index[-1].timestamp(),
-                self.n, d, self.arima_order
-            )
-            results.to_csv(filename)
-            logging.debug('Results saved in file: "{}"'.format(filename))
 
         logging.info('Best model for {} was {}, with error of {:.3f}.'.format(
                      df.name, best_config, best_score))
@@ -1111,10 +1007,6 @@ class Arima():
             self.test_signal(diff_df)
         except(LinAlgError):
             logging.error('Could not test signals')
-
-        if self.plot:
-            self.plot_signal(df)
-            self.plot_signal(diff_df)
 
         df.to_csv(self.results_dir + "/" + df.name + ".raw")
         diff_df.to_csv(self.results_dir + "/" + df.name + ".diff")
