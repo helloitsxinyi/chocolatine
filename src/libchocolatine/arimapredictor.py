@@ -154,23 +154,39 @@ class ArimaPredictor(object):
             diff = 0
             value = forecast        # just use the forecast as substitute
         elif useForecastDiff:
-            if (forecast > value):
-                value = forecast - min(0.2 * (forecast - value), 0.2 * forecast)
-            else:
-                value = forecast + min(0.2 * (value - forecast), 0.2 * forecast)
-            diff = value - self.history[-self.ppw]['signalValue']
-
             # save a "history" value that is the forecast but shifted
             # slightly towards the observed value -- this will allow us to
             # eventually adjust in the event of a permanent change in the
             # level of the signal, without letting outages or outliers have
             # too much of an effect on future predictions
-            value = forecast - (0.1 * (forecast - value))
+            if (forecast > value):
+                value = forecast - min(0.2 * (forecast - value), 0.2 * forecast)
+            elif forecast >= 0:
+                value = forecast + min(0.2 * (value - forecast), 0.2 * forecast)
+            else:
+                # Observed value is potentially anomalous.
+                # Forecast is negative, so is also dodgy.
+                # Our best bet is probably just to pretend we saw the same
+                # value as last time and hope things come right in the long
+                # run?
+                value = self.history[-self.ppw]['signalValue']
+
+            # We're supposed to be using our forecast, but if the forecast is
+            # further away from the previous value than our observed current
+            # value, it makes more sense to trust the observation than the
+            # forecast. This prevents the future forecasts from
+            # overcompensating when they have to adjust to a major change in
+            # the series.
+            fc_diff = value - self.history[-self.ppw]['signalValue']
+            act_diff = origval - self.history[-self.ppw]['signalValue']
+
+            if abs(fc_diff) < abs(act_diff):
+                diff = fc_diff
+            else:
+                diff = act_diff
         else:
             diff = value - self.history[-self.ppw]['signalValue']
 
-        print(timestamp, statistics.mean(self.errors), origval, forecast, diff, \
-                    self.history[-self.ppw]['timestamp'], self.history[-self.ppw]['signalValue'])
         self.diff_history.append({'timestamp': pdts, 'signalDiff': diff})
 
         self.history.append({'timestamp': pdts, 'signalValue': value})
