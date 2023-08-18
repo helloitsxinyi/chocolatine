@@ -237,6 +237,12 @@ class ChocModeller(object):
              injob['ts'] = time.time()
              injob['ts'] -= (injob['ts'] % 300)
 
+        if injob['fqid'].startswith('gtr.'):
+            # TEMPORARY - I'm doing some testing with the gtr. series
+            if injob['fqid'] in self.waiting:
+                del(self.waiting[injob['fqid']])
+            return
+
         if injob['fqid'] in self.waiting:
             meta = fetchIodaMeta(injob['fqid'], injob['ts'], self.arimahistory)
 
